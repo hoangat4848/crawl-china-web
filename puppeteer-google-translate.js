@@ -1,5 +1,6 @@
 const puppeteer = require("puppeteer");
 const _ = require("lodash");
+const fs = require('fs');
 
 const CHUNK_LIMIT = 50;
 const BATCH_LIMIT = 5;
@@ -76,8 +77,8 @@ async function translateText(text, opt) {
   const querryChunks = _.chunk(queryArr, CHUNK_LIMIT);
   let mappedResults = {};
   for(let i = 0; i < querryChunks.length; i += BATCH_LIMIT) {
+    console.log(`--------- BATCH --------- ${i+BATCH_LIMIT}/${querryChunks.length}`)
     const batch = querryChunks.slice(i, i + BATCH_LIMIT);
-    // const chunk = querryChunks[i];
 
     const results = await Promise.all(batch.map(chunk => fromTextArray(chunk, {
       headless: opt.headless,
@@ -87,6 +88,13 @@ async function translateText(text, opt) {
     mappedResults = {
       ...mappedResults,
       ..._.merge({}, ...results),
+    }
+
+    if (opt.onBatchDone) {
+      await opt.onBatchDone({
+        total: mappedResults,
+        data: _.merge({}, ...results),
+      });
     }
   }
 
@@ -98,4 +106,27 @@ async function translateText(text, opt) {
   }, {})
 }
 
-module.exports = translateText;
+async function appendJsonData(fileName, newData) {
+  fs.readFile(fileName, function (err, data) {
+    let json = null;
+    try {
+      json = JSON.parse(data);
+    } catch (error) {
+      json = {};
+    }
+    const newJson = {
+      ...json,
+      ...newData,
+    }
+    fs.writeFile(fileName, JSON.stringify(newJson), function(err){
+      if (err) throw err;
+      console.log(`The "data to append" was appended to file ${fileName}!`);
+    });
+  })
+}
+
+module.exports = {
+  translateText,
+  appendJsonData
+};
+
